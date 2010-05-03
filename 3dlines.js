@@ -107,6 +107,12 @@ var timer = null;
 var lines = [];
 var out = V(0, 0, 0);
 
+var MONOCHROME_COLORS = [];
+for (var i = 0; i < 255; i++) {
+  var c = new Number(i).toString(16);
+  MONOCHROME_COLORS.push("#" + c + c + c);
+}
+
 var make2d = null;
 
 var make2d_funcs = {
@@ -141,15 +147,17 @@ var DEFAULT_MAKE2D_FUNC = "xz_p3d";
 var zeffect = null;
 
 var zeffect_funcs = {
+  "none": function(ctx, z) {
+  },
   "width": function(ctx, z) {
     ctx.lineWidth = z * 0.02;
   },
   "color": function(ctx, z) {
-    ctx.strokeStyle = ['rgb(', z, ',', z, ',', z, ')'].join('');
+    ctx.strokeStyle = MONOCHROME_COLORS[z];
   },
   "w+c": function(ctx, z) {
     ctx.lineWidth = z * 0.02;
-    ctx.strokeStyle = ['rgb(', z, ',', z, ',', z, ')'].join('');
+    ctx.strokeStyle = MONOCHROME_COLORS[z];
   }
 };
 
@@ -279,6 +287,7 @@ function draw() {
 
   ctx.strokeStyle = 'rgb(255, 255, 255)';
   ctx.fillStyle = 'rgb(255, 255, 255)';
+  ctx.lineWidth = 1;
   var cp = camera.p();
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
