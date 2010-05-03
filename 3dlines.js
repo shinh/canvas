@@ -105,6 +105,71 @@ var Timer = function() {
 var camera = null;
 var timer = null;
 var lines = [];
+var out = V(0, 0, 0);
+
+var make2d = null;
+
+var make2d_funcs = {
+  "xz" : function(p, c) {
+    out.x = p.x - c.x + SW / 2;
+    out.y = p.z - c.z + SH / 2;
+    out.z = 255;
+  },
+  "xy" : function(p, c) {
+    out.x = p.x - c.x + SW / 2;
+    out.y = p.y - c.y + SH / 2;
+    out.z = 255;
+  },
+  "xz_p3d" : function(p, c) {
+    var dz = (p.y - c.y + MAX_DIST) * 0.5 / MAX_DIST;
+    var r = 1 / (dz + 1);
+    out.x = (p.x - c.x) * r + SW / 2;
+    out.y = (p.z - c.z) * r + SH / 2;
+    out.z = Math.round(255 - dz * 200);
+  },
+  "bug" : function(p, c) {
+    var dz = (p.y - c.y);
+    var r = 1 / (dz + 1);
+    out.x = (p.x - c.x) * r + SW / 2;
+    out.y = (p.z - c.z) * r + SH / 2;
+    out.z = Math.round(255 - dz * 200);
+  }
+};
+
+var DEFAULT_MAKE2D_FUNC = "xz_p3d";
+
+var zeffect = null;
+
+var zeffect_funcs = {
+  "width": function(ctx, z) {
+    ctx.lineWidth = z * 0.02;
+  },
+  "color": function(ctx, z) {
+    ctx.strokeStyle = ['rgb(', z, ',', z, ',', z, ')'].join('');
+  },
+  "w+c": function(ctx, z) {
+    ctx.lineWidth = z * 0.02;
+    ctx.strokeStyle = ['rgb(', z, ',', z, ',', z, ')'].join('');
+  }
+};
+
+var DEFAULT_ZEFFECT_FUNC = "w+c";
+
+var CATEGORIES = [
+  {
+    "id": "make2d",
+    "name": "3D=>2D",
+    "funcs": make2d_funcs,
+    "default_func": DEFAULT_MAKE2D_FUNC
+  },
+  {
+    "id": "zeffect",
+    "name": "Z effect",
+    "funcs": zeffect_funcs,
+    "default_func": DEFAULT_ZEFFECT_FUNC
+  }
+];
+var category_map = {};
 
 function log(msg) {
   document.getElementById("console").innerHTML += msg + "<br>";
@@ -121,7 +186,39 @@ function initLine(cp) {
   return Line(V(cp.x + pg(), cp.y + pg(), cp.z + pg()), V(vx, vy, vz));
 }
 
+function selectCategory(self) {
+  var id = self.name;
+  window[id] = category_map[id].funcs[self.value];
+}
+
+function initUI() {
+  var html = "";
+  for (var i = 0; i < CATEGORIES.length; i++) {
+    var category = CATEGORIES[i];
+
+    category_map[category.id] = category;
+
+    html += ['<div>', category.name, ': '].join('');
+    var funcs = category.funcs;
+    for (var key in funcs) {
+      checked = "";
+      if (key == category.default_func) {
+        checked = " checked";
+      }
+      html += ['<input type="radio" name="', category.id, '" value="',
+               key, '"', checked,
+               ' onclick="selectCategory(this)">', key].join('');
+    }
+  }
+  document.getElementById("ui").innerHTML = html;
+}
+
 function init() {
+  initUI();
+
+  make2d = make2d_funcs[DEFAULT_MAKE2D_FUNC];
+  zeffect = zeffect_funcs[DEFAULT_ZEFFECT_FUNC];
+
   timer = new Timer();
 
   camera = new Camera();
@@ -153,7 +250,7 @@ function reflect(d, n, v, c) {
 }
 
 function move() {
-  document.getElementById("fps").innerHTML = timer.move();
+  document.getElementById("fps").textContent = timer.move();
 
   camera.move();
   var cp = camera.p();
@@ -188,20 +285,16 @@ function draw() {
     var k = 0;
     for (var j = line.nextIndex(line.index); j != line.index; j = k) {
       var k = line.nextIndex(j);
-      var px = line.hist[j].x;
-      var py = line.hist[j].y;
-      var pz = line.hist[j].z;
-      var nx = line.hist[k].x;
-      var ny = line.hist[k].y;
-      var nz = line.hist[k].z;
+      var p = line.hist[j];
+      var n = line.hist[k];
 
-      var ssx = px - cp.x + SW / 2;
-      var ssy = pz - cp.z + SH / 2;
-      var sdx = nx - cp.x + SW / 2;
-      var sdy = nz - cp.z + SH / 2;
       ctx.beginPath();
-      ctx.moveTo(ssx, ssy);
-      ctx.lineTo(sdx, sdy);
+      make2d(p, cp);
+      if (out.z <= 0) continue;
+      zeffect(ctx, out.z);
+      ctx.moveTo(out.x, out.y);
+      make2d(n, cp);
+      ctx.lineTo(out.x, out.y);
       ctx.stroke();
     }
   }
@@ -211,39 +304,4 @@ function run() {
   move();
   draw();
   cont();
-/*
-  var expr = document.getElementById("expr").value;
-
-  try {
-    var n = 0;
-    eval(expr);
-  } catch(e) {
-    expr = prevExpr;
-  }
-  prevExpr = expr;
-
-  for (var n = 0; n < 7; n++) {
-    balls[n] += eval(expr);
-  }
-
-  var canvas = document.getElementById("canvas");
-  var ctx = canvas.getContext("2d");
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-  ctx.globalCompositeOperation = "source-over";
-  ctx.fillRect(0, 0, 500, 500);
-
-  ctx.fillStyle = 'rgb(255, 255, 255)';
-  for (var n = 0; n < 7; n++) {
-    balls[n] += eval(expr);
-
-    var r = balls[n] * Math.PI / 180;
-    var x = Math.cos(r) * 150 + 250;
-    var y = Math.sin(r) * 150 + 250;
-    ctx.beginPath();
-    ctx.arc(x, y, 15, 0, Math.PI * 2, true);
-    ctx.fill();
-  }
-
-  cont();
-*/
 }
