@@ -5,6 +5,11 @@ var SH = 480;
 
 var MAX_DIST = 400;
 
+var TIMEOUT_MSEC = 16;
+
+var Z_FACTOR = 200;
+var WIDTH_FACTOR = 50;
+
 var V = function(x, y, z) {
   if (this == window)
     return new V(x, y, z);
@@ -104,8 +109,9 @@ var Timer = function() {
 
 var camera = null;
 var timer = null;
-var lines = [];
+var lines = null;
 var out = V(0, 0, 0);
+var timeoutId = null;
 
 var MONOCHROME_COLORS = [];
 for (var i = 0; i < 255; i++) {
@@ -131,14 +137,14 @@ var make2d_funcs = {
     var r = 1 / (dz + 1);
     out.x = (p.x - c.x) * r + SW / 2;
     out.y = (p.z - c.z) * r + SH / 2;
-    out.z = Math.round(255 - dz * 200);
+    out.z = Math.round(255 - dz * Z_FACTOR);
   },
   "bug" : function(p, c) {
     var dz = (p.y - c.y);
     var r = 1 / (dz + 1);
     out.x = (p.x - c.x) * r + SW / 2;
     out.y = (p.z - c.z) * r + SH / 2;
-    out.z = Math.round(255 - dz * 200);
+    out.z = Math.round(255 - dz * Z_FACTOR);
   }
 };
 
@@ -150,13 +156,13 @@ var zeffect_funcs = {
   "none": function(ctx, z) {
   },
   "width": function(ctx, z) {
-    ctx.lineWidth = z * 0.02;
+    ctx.lineWidth = z / WIDTH_FACTOR;
   },
   "color": function(ctx, z) {
     ctx.strokeStyle = MONOCHROME_COLORS[z];
   },
   "w+c": function(ctx, z) {
-    ctx.lineWidth = z * 0.02;
+    ctx.lineWidth = z / WIDTH_FACTOR;
     ctx.strokeStyle = MONOCHROME_COLORS[z];
   }
 };
@@ -199,8 +205,23 @@ function selectCategory(self) {
   window[id] = category_map[id].funcs[self.value];
 }
 
+function changeParameter(self) {
+  var id = self.name;
+
+  var val = parseInt(self.value, 10);
+  log(id + ": " + window[id] + " => " + val);
+
+  window[id] = val;
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+  initDemo();
+}
+
 function initUI() {
   var html = "";
+
   for (var i = 0; i < CATEGORIES.length; i++) {
     var category = CATEGORIES[i];
 
@@ -215,15 +236,30 @@ function initUI() {
       }
       html += ['<input type="radio" name="', category.id, '" value="',
                key, '"', checked,
-               ' onclick="selectCategory(this)">', key].join('');
+               ' onchange="selectCategory(this)">', key].join('');
     }
   }
+
+  PARAMETERS = [
+    'NUM_HISTS',
+    'NUM_LINES',
+    'MAX_DIST',
+    'TIMEOUT_MSEC',
+    'WIDTH_FACTOR',
+    'Z_FACTOR'
+  ];
+  for (var i = 0; i < PARAMETERS.length; i++) {
+    var param = PARAMETERS[i];
+    html += ['<div>', param, ': ',
+             '<input size="10" name="', param, '" value="',
+             window[param],
+             '" onkeyup="changeParameter(this)">'].join("");
+  }
+
   document.getElementById("ui").innerHTML = html;
 }
 
-function init() {
-  initUI();
-
+function initDemo() {
   make2d = make2d_funcs[DEFAULT_MAKE2D_FUNC];
   zeffect = zeffect_funcs[DEFAULT_ZEFFECT_FUNC];
 
@@ -231,16 +267,23 @@ function init() {
 
   camera = new Camera();
   var cp = camera.p();
+
+  lines = new Array(NUM_LINES);
   for (var i = 0; i < NUM_LINES; i++) {
     lines[i] = initLine(cp);
   }
 
-  log("init done");
   cont();
 }
 
+function init() {
+  initUI();
+  initDemo();
+  log("init done");
+}
+
 function cont() {
-  setTimeout("run();", 16);
+  timeoutId = setTimeout("run();", TIMEOUT_MSEC);
 }
 
 function reflect(d, n, v, c) {
@@ -304,6 +347,7 @@ function draw() {
       ctx.moveTo(out.x, out.y);
       make2d(n, cp);
       ctx.lineTo(out.x, out.y);
+      ctx.closePath();
       ctx.stroke();
     }
   }
