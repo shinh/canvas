@@ -10,6 +10,12 @@ var TIMEOUT_MSEC = 16;
 var Z_FACTOR = 200;
 var WIDTH_FACTOR = 50;
 
+var LINE_VEL = 20;
+var CAM_VEL_FACTOR = 30;
+
+var FILL_ALPHA = 10;
+var FILL_ALPHA_STR = '';
+
 var V = function(x, y, z) {
   if (this == window)
     return new V(x, y, z);
@@ -81,7 +87,7 @@ var Camera = function() {
   };
 
   this.move = function() {
-    this.angle += 0.003;
+    this.angle += CAM_VEL_FACTOR * 0.0001;
   }
 };
 
@@ -113,13 +119,7 @@ var lines = null;
 var out = V(0, 0, 0);
 var timeoutId = null;
 
-var MONOCHROME_COLORS = [];
-for (var i = 0; i < 255; i++) {
-  var c = new Number(i).toString(16);
-  MONOCHROME_COLORS.push("#" + c + c + c);
-}
-
-var make2d = null;
+var MONOCHROME_COLORS = null;
 
 var make2d_funcs = {
   "xz" : function(p, c) {
@@ -148,10 +148,6 @@ var make2d_funcs = {
   }
 };
 
-var DEFAULT_MAKE2D_FUNC = "xz_p3d";
-
-var zeffect = null;
-
 var zeffect_funcs = {
   "none": function(ctx, z) {
   },
@@ -167,20 +163,42 @@ var zeffect_funcs = {
   }
 };
 
-var DEFAULT_ZEFFECT_FUNC = "w+c";
+var gencolor_funcs = {
+  "alpha": function(c) {
+    return "rgba(255,255,255," + (c / 256) + ")";
+  },
+  "gray": function(c) {
+    c = new Number(c).toString(16);
+    return "#" + c + c + c;
+  },
+  "red": function(c) {
+    return "red";
+  },
+  "chaos": function(c) {
+    var g = function() { return Math.floor(Math.random() * 255); }
+    return "rgb(" + g() + "," + g() + "," + g() + ")";
+  }
+};
 
 var CATEGORIES = [
   {
     "id": "make2d",
     "name": "3D=>2D",
     "funcs": make2d_funcs,
-    "default_func": DEFAULT_MAKE2D_FUNC
+    "default_func": "xz_p3d"
   },
   {
     "id": "zeffect",
     "name": "Z effect",
     "funcs": zeffect_funcs,
-    "default_func": DEFAULT_ZEFFECT_FUNC
+    "default_func": "w+c"
+  },
+  {
+    "id": "gencolor",
+    "name": "Colors",
+    "funcs": gencolor_funcs,
+    "default_func": "alpha",
+    "onchange": initColors
   }
 ];
 var category_map = {};
@@ -193,7 +211,7 @@ function initLine(cp) {
   var pg = function() { return Math.random() * 200 - 100; };
   var t = Math.random() * Math.PI * 2;
   var p = Math.random() * Math.PI;
-  var vr = 20;
+  var vr = LINE_VEL;
   var vx = vr * Math.sin(t) * Math.cos(p);
   var vy = vr * Math.sin(t) * Math.sin(p);
   var vz = vr * Math.cos(t);
@@ -202,13 +220,20 @@ function initLine(cp) {
 
 function selectCategory(self) {
   var id = self.name;
-  window[id] = category_map[id].funcs[self.value];
+  var category = category_map[id];
+  window[id] = category.funcs[self.value];
+  if (category.onchange) {
+    category.onchange();
+  }
 }
 
 function changeParameter(self) {
   var id = self.name;
 
   var val = parseInt(self.value, 10);
+  if (window[id] == val) {
+    return;
+  }
   log(id + ": " + window[id] + " => " + val);
 
   window[id] = val;
@@ -246,8 +271,11 @@ function initUI() {
     'MAX_DIST',
     'TIMEOUT_MSEC',
     'WIDTH_FACTOR',
-    'Z_FACTOR'
-  ];
+    'Z_FACTOR',
+    'LINE_VEL',
+    'CAM_VEL_FACTOR',
+    'FILL_ALPHA'
+    ];
   for (var i = 0; i < PARAMETERS.length; i++) {
     var param = PARAMETERS[i];
     html += ['<div>', param, ': ',
@@ -259,9 +287,17 @@ function initUI() {
   document.getElementById("ui").innerHTML = html;
 }
 
+function initColors() {
+  MONOCHROME_COLORS = [];
+  for (var i = 0; i < 255; i++) {
+    MONOCHROME_COLORS.push(gencolor(i));
+  }
+}
+
 function initDemo() {
-  make2d = make2d_funcs[DEFAULT_MAKE2D_FUNC];
-  zeffect = zeffect_funcs[DEFAULT_ZEFFECT_FUNC];
+  FILL_ALPHA_STR = 'rgba(0, 0, 0, ' + FILL_ALPHA * 0.01 + ')';
+
+  initColors();
 
   timer = new Timer();
 
@@ -278,6 +314,10 @@ function initDemo() {
 
 function init() {
   initUI();
+  for (var i = 0; i < CATEGORIES.length; i++) {
+    var category = CATEGORIES[i];
+    window[category.id] = category.funcs[category.default_func];
+  }
   initDemo();
   log("init done");
 }
@@ -324,7 +364,7 @@ function move() {
 function draw() {
   var canvas = document.getElementById("canvas");
   var ctx = canvas.getContext("2d");
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+  ctx.fillStyle = FILL_ALPHA_STR;
   ctx.globalCompositeOperation = "source-over";
   ctx.fillRect(0, 0, SW, SH);
 
