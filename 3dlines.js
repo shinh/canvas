@@ -137,14 +137,14 @@ var make2d_funcs = {
     var r = 1 / (dz + 1);
     out.x = (p.x - c.x) * r + SW / 2;
     out.y = (p.z - c.z) * r + SH / 2;
-    out.z = Math.round(255 - dz * Z_FACTOR);
+    out.z = Math.floor(256 - dz * Z_FACTOR);
   },
   "bug" : function(p, c) {
     var dz = (p.y - c.y);
     var r = 1 / (dz + 1);
     out.x = (p.x - c.x) * r + SW / 2;
     out.y = (p.z - c.z) * r + SH / 2;
-    out.z = Math.round(255 - dz * Z_FACTOR);
+    out.z = Math.floor(256 - dz * Z_FACTOR);
   }
 };
 
@@ -163,20 +163,44 @@ var zeffect_funcs = {
   }
 };
 
+function hexstr(v) {
+  v = new Number(v).toString(16);
+  return v.length == 1 ? "0" + v : v;
+}
+
+function rgb(r, g, b) {
+  r = hexstr(r);
+  g = hexstr(g);
+  b = hexstr(b);
+  return "#" + r + g + b;
+}
+
 var gencolor_funcs = {
   "alpha": function(c) {
     return "rgba(255,255,255," + (c / 256) + ")";
   },
   "gray": function(c) {
-    c = new Number(c).toString(16);
+    c = hexstr(c);
     return "#" + c + c + c;
   },
   "red": function(c) {
     return "red";
   },
+  "rainbow": function(c) {
+    if (c < 64) {
+      return rgb(255, c * 4, 0);
+    }
+    if (c < 128) {
+      return rgb(255 - (c - 64) * 4, 255, 0);
+    }
+    if (c < 192) {
+      return rgb(0, 255, (c - 128) * 4);
+    }
+    return rgb(0, 255 - (c - 192) * 4, 255);
+  },
   "chaos": function(c) {
     var g = function() { return Math.floor(Math.random() * 255); }
-    return "rgb(" + g() + "," + g() + "," + g() + ")";
+    return rgb(g(), g(), g());
   }
 };
 
@@ -289,8 +313,9 @@ function initUI() {
 
 function initColors() {
   MONOCHROME_COLORS = [];
-  for (var i = 0; i < 255; i++) {
-    MONOCHROME_COLORS.push(gencolor(i));
+  for (var i = 0; i < 256; i++) {
+    var c = gencolor(i);
+    MONOCHROME_COLORS.push(c);
   }
 }
 
@@ -383,6 +408,7 @@ function draw() {
       ctx.beginPath();
       make2d(p, cp);
       if (out.z <= 0) continue;
+      if (out.z > 255) out.z = 255;
       zeffect(ctx, out.z);
       ctx.moveTo(out.x, out.y);
       make2d(n, cp);
